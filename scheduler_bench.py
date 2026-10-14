@@ -16,7 +16,8 @@ Scenario families:
 Staged 0-1 reward per scenario:
   stage 1 (0.2)  well-formed answer, correct duration
   stage 2 (0.6)  every required participant inside an availability window,
-                 no busy-conflict, hard constraints respected (partial credit)
+                 no busy-conflict (partial credit). Hard constraints
+                 (scheduling week, banned weekdays) are a gate: violation -> 0.0
   stage 3 (0.2)  soft preferences
 
 No dependencies. Python 3.10+.
@@ -181,12 +182,17 @@ def grade(scenario: Scenario, answer: dict) -> tuple[float, str]:
     else:
         score += 0.2
 
-    # stage 2: hard feasibility
+    # stage 2: hard feasibility - hard-constraint violations zero the reward
     horizon_end = HORIZON_MONDAY + timedelta(days=HORIZON_DAYS)
+    hard_fail = False
     if not (HORIZON_MONDAY <= start and end <= horizon_end):
         reasons.append("outside the scheduling week")
+        hard_fail = True
     if start.weekday() in scenario.no_weekdays:
         reasons.append(f"lands on banned weekday {start.weekday()}")
+        hard_fail = True
+    if hard_fail:
+        return 0.0, "; ".join(reasons)
     checks = []
     for p in scenario.participants:
         if not p.required:
@@ -304,11 +310,24 @@ class TestGrader(unittest.TestCase):
         self.assertIn("duration", reason)
 
     def test_no_friday_enforced(self):
+        # adversarial: this Friday slot fits every participant's real window,
+        # so only the hard weekday ban can stop it - it must score zero
         sc = next(s for s in scenarios() if s.key == "london-ist-nofri")
         friday = utc(2026, 11, 6, 13, 0)  # 13:00 UTC Fri = 13:00 London, 18:30 IST
         score, reason = grade(sc, {"start_utc": friday.isoformat(),
                                    "end_utc": (friday + timedelta(minutes=30)).isoformat()})
+        self.assertEqual(score, 0.0)
         self.assertIn("banned weekday", reason)
+
+    def test_outside_scheduling_week_scores_zero(self):
+        # adversarial: correct local times next week - every participant would
+        # be free at these clock times, but the slot is outside the horizon
+        sc = next(s for s in scenarios() if s.key == "pst-ist-intro")
+        start = utc(2026, 11, 9, 15, 0)  # next Mon: 07:00 PST, 20:30 IST
+        score, reason = grade(sc, {"start_utc": start.isoformat(),
+                                   "end_utc": (start + timedelta(minutes=30)).isoformat()})
+        self.assertEqual(score, 0.0)
+        self.assertIn("outside the scheduling week", reason)
 
     def test_busy_conflict_caught(self):
         sc = next(s for s in scenarios() if s.key == "reschedule-pst-est")
