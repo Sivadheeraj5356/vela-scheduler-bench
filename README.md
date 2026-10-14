@@ -5,7 +5,7 @@ sample for teams building agentic scheduling (like Vela).
 
 Scheduling looks easy in a demo and breaks in production on exactly three
 things: timezone math, multi-party constraints, and reschedules. This bench
-pins all three down with hidden graders. The agent proposes a slot; the
+pins all three down with staged graders. The agent proposes a slot; the
 grader checks it against every participant's real calendar. No self-reported
 wins.
 
@@ -42,6 +42,10 @@ python scheduler_bench.py run --agent greedy    # naive reference bar
 python scheduler_bench.py run --agent oracle    # grid-search solver: must be 1.000
 python scheduler_bench.py test                  # unittest suite
 ```
+
+Browser demo: <https://sivadheeraj5356.github.io/vela-scheduler-bench/> - the same
+grader ported to JavaScript, verified case-for-case against the Python
+runner on all six scenarios.
 
 Reference numbers:
 
