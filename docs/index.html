@@ -14,7 +14,7 @@ td,th{border:1px solid #e3e5e8;padding:.3rem .5rem;text-align:left;vertical-alig
 .muted{color:#5f6368;font-size:.85rem}
 </style></head><body>
 <h1>Scheduler Bench</h1>
-<p class="muted">A small, verifiable eval environment for scheduling agents. Six scenarios over the week of Mon Nov 2, 2026 (US DST has ended): two-party timezone pairs, a three-zone panel, a reschedule, a hard no-Friday rule, and a soft morning preference. An agent proposes a UTC slot; the grader checks it against every participant's real calendar and returns a staged 0-1 reward: 0.2 well-formed and correct duration, 0.6 every required participant free, 0.2 soft preferences. Timezone conversion was applied when this data was generated, so grading here is pure interval math and matches the Python runner case for case.</p>
+<p class="muted">A small, verifiable eval environment for scheduling agents. Six scenarios over the week of Mon Nov 2, 2026 (US DST has ended): two-party timezone pairs, a three-zone panel, a reschedule, a hard no-Friday rule, and a soft morning preference. An agent proposes a UTC slot; the grader checks it against every participant's real calendar and returns a staged 0-1 reward: 0.2 well-formed and correct duration, 0.6 every required participant free, 0.2 soft preferences. Hard constraints (the scheduling week, banned weekdays) are a gate: a violation scores 0. Timezone conversion was applied when this data was generated, so grading here is pure interval math and matches the Python runner case for case.</p>
 <div>
 <select id="scn"></select>
 <button id="runGreedy">Run greedy (naive bar)</button>
@@ -36,9 +36,11 @@ function grade(sc, ans){
   const start=Date.parse(ans.start_utc), end=Date.parse(ans.end_utc);
   if(isNaN(start)||isNaN(end)) return {score:0, reason:'unparseable start_utc/end_utc (need tz-aware ISO)'};
   if(end-start !== sc.duration_minutes*MS){reasons.push('duration '+((end-start)/MS)+'m != '+sc.duration_minutes+'m');} else {score+=0.2;}
-  if(!(start>=HORIZON_MONDAY && end<=HORIZON_END)) reasons.push('outside the scheduling week');
+  let hardFail=false;
+  if(!(start>=HORIZON_MONDAY && end<=HORIZON_END)){reasons.push('outside the scheduling week');hardFail=true;}
   const wd=(new Date(start).getUTCDay()+6)%7;
-  if(sc.no_weekdays.includes(wd)) reasons.push('lands on banned weekday '+wd);
+  if(sc.no_weekdays.includes(wd)){reasons.push('lands on banned weekday '+wd);hardFail=true;}
+  if(hardFail) return {score:0, reason:reasons.join('; ')};
   const checks=[];
   for(const p of sc.participants){
     if(!p.required) continue;
