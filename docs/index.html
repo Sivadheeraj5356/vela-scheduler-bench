@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Scheduler Bench - runnable demo</title>
+<style>
+body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:860px;margin:2rem auto;padding:0 1rem;color:#1c1e21;line-height:1.45}
+h1{font-size:1.35rem;margin-bottom:.2rem} h2{font-size:1.05rem;margin-top:1.4rem}
+select,button{font-size:.95rem;padding:.4rem .7rem;margin:.25rem .5rem .25rem 0;border:1px solid #c9ccd1;border-radius:6px;background:#fff;cursor:pointer}
+button{background:#166fe5;color:#fff;border:none}button.ghost{background:#fff;color:#166fe5;border:1px solid #166fe5}
+.card{border:1px solid #e3e5e8;border-radius:8px;padding:1rem;margin:.8rem 0}
+.score{font-size:1.5rem;font-weight:600}
+table{border-collapse:collapse;width:100%;font-size:.88rem}
+td,th{border:1px solid #e3e5e8;padding:.3rem .5rem;text-align:left;vertical-align:top}
+.fail{color:#b3261e}.pass{color:#137333}
+.muted{color:#5f6368;font-size:.85rem}
+</style></head><body>
+<h1>Scheduler Bench</h1>
+<p class="muted">A small, verifiable eval environment for scheduling agents. Six scenarios over the week of Mon Nov 2, 2026 (US DST has ended): two-party timezone pairs, a three-zone panel, a reschedule, a hard no-Friday rule, and a soft morning preference. An agent proposes a UTC slot; the grader checks it against every participant's real calendar and returns a staged 0-1 reward: 0.2 well-formed and correct duration, 0.6 every required participant free, 0.2 soft preferences. Timezone conversion was applied when this data was generated, so grading here is pure interval math and matches the Python runner case for case.</p>
+<div>
+<select id="scn"></select>
+<button id="runGreedy">Run greedy (naive bar)</button>
+<button id="runOracle" class="ghost">Run grid oracle</button>
+</div>
+<div id="out"></div>
+<h2>Scenario detail</h2>
+<div id="detail"></div>
+<p class="muted">Python source, tests, and README: <a href="https://github.com/Sivadheeraj5356/vela-scheduler-bench">github.com/Sivadheeraj5356/vela-scheduler-bench</a></p>
+<script>
+const SCENARIOS = [{"key": "pst-ist-intro", "title": "Intro call: candidate in PST, recruiter in IST, 30 min", "duration_minutes": 30, "no_weekdays": [], "prefer_morning_for": [], "participants": [{"name": "candidate", "tz": "America/Los_Angeles", "required": true, "local_windows": [[0, 420, 600], [1, 420, 600], [2, 420, 600], [3, 420, 600], [4, 420, 600]], "windows": [{"start": "2026-11-02T15:00:00+00:00", "end": "2026-11-02T18:00:00+00:00"}, {"start": "2026-11-03T15:00:00+00:00", "end": "2026-11-03T18:00:00+00:00"}, {"start": "2026-11-04T15:00:00+00:00", "end": "2026-11-04T18:00:00+00:00"}, {"start": "2026-11-05T15:00:00+00:00", "end": "2026-11-05T18:00:00+00:00"}, {"start": "2026-11-06T15:00:00+00:00", "end": "2026-11-06T18:00:00+00:00"}], "busy": []}, {"name": "recruiter", "tz": "Asia/Kolkata", "required": true, "local_windows": [[0, 1080, 1380], [1, 1080, 1380], [2, 1080, 1380], [3, 1080, 1380], [4, 1080, 1380]], "windows": [{"start": "2026-11-02T12:30:00+00:00", "end": "2026-11-02T17:30:00+00:00"}, {"start": "2026-11-03T12:30:00+00:00", "end": "2026-11-03T17:30:00+00:00"}, {"start": "2026-11-04T12:30:00+00:00", "end": "2026-11-04T17:30:00+00:00"}, {"start": "2026-11-05T12:30:00+00:00", "end": "2026-11-05T17:30:00+00:00"}, {"start": "2026-11-06T12:30:00+00:00", "end": "2026-11-06T17:30:00+00:00"}], "busy": []}]}, {"key": "panel-3tz", "title": "Panel: PST + EST + IST, all required, 45 min, one conflict", "duration_minutes": 45, "no_weekdays": [], "prefer_morning_for": [], "participants": [{"name": "hiring_manager", "tz": "America/Los_Angeles", "required": true, "local_windows": [[0, 420, 660], [1, 420, 660], [2, 420, 660], [3, 420, 660], [4, 420, 660]], "windows": [{"start": "2026-11-02T15:00:00+00:00", "end": "2026-11-02T19:00:00+00:00"}, {"start": "2026-11-03T15:00:00+00:00", "end": "2026-11-03T19:00:00+00:00"}, {"start": "2026-11-04T15:00:00+00:00", "end": "2026-11-04T19:00:00+00:00"}, {"start": "2026-11-05T15:00:00+00:00", "end": "2026-11-05T19:00:00+00:00"}, {"start": "2026-11-06T15:00:00+00:00", "end": "2026-11-06T19:00:00+00:00"}], "busy": []}, {"name": "vp", "tz": "America/New_York", "required": true, "local_windows": [[0, 540, 780], [1, 540, 780], [2, 540, 780], [3, 540, 780], [4, 540, 780]], "windows": [{"start": "2026-11-02T14:00:00+00:00", "end": "2026-11-02T18:00:00+00:00"}, {"start": "2026-11-03T14:00:00+00:00", "end": "2026-11-03T18:00:00+00:00"}, {"start": "2026-11-04T14:00:00+00:00", "end": "2026-11-04T18:00:00+00:00"}, {"start": "2026-11-05T14:00:00+00:00", "end": "2026-11-05T18:00:00+00:00"}, {"start": "2026-11-06T14:00:00+00:00", "end": "2026-11-06T18:00:00+00:00"}], "busy": [{"start": "2026-11-03T15:00:00+00:00", "end": "2026-11-03T16:30:00+00:00"}]}, {"name": "candidate", "tz": "Asia/Kolkata", "required": true, "local_windows": [[0, 1080, 1410], [1, 1080, 1410], [2, 1080, 1410], [3, 1080, 1410], [4, 1080, 1410]], "windows": [{"start": "2026-11-02T12:30:00+00:00", "end": "2026-11-02T18:00:00+00:00"}, {"start": "2026-11-03T12:30:00+00:00", "end": "2026-11-03T18:00:00+00:00"}, {"start": "2026-11-04T12:30:00+00:00", "end": "2026-11-04T18:00:00+00:00"}, {"start": "2026-11-05T12:30:00+00:00", "end": "2026-11-05T18:00:00+00:00"}, {"start": "2026-11-06T12:30:00+00:00", "end": "2026-11-06T18:00:00+00:00"}], "busy": []}]}, {"key": "london-ist-nofri", "title": "London + IST, 30 min, no Friday (hard)", "duration_minutes": 30, "no_weekdays": [4], "prefer_morning_for": [], "participants": [{"name": "client", "tz": "Europe/London", "required": true, "local_windows": [[0, 540, 1020], [1, 540, 1020], [2, 540, 1020], [3, 540, 1020], [4, 540, 1020]], "windows": [{"start": "2026-11-02T09:00:00+00:00", "end": "2026-11-02T17:00:00+00:00"}, {"start": "2026-11-03T09:00:00+00:00", "end": "2026-11-03T17:00:00+00:00"}, {"start": "2026-11-04T09:00:00+00:00", "end": "2026-11-04T17:00:00+00:00"}, {"start": "2026-11-05T09:00:00+00:00", "end": "2026-11-05T17:00:00+00:00"}, {"start": "2026-11-06T09:00:00+00:00", "end": "2026-11-06T17:00:00+00:00"}], "busy": []}, {"name": "analyst", "tz": "Asia/Kolkata", "required": true, "local_windows": [[0, 720, 1260], [1, 720, 1260], [2, 720, 1260], [3, 720, 1260], [4, 720, 1260]], "windows": [{"start": "2026-11-02T06:30:00+00:00", "end": "2026-11-02T15:30:00+00:00"}, {"start": "2026-11-03T06:30:00+00:00", "end": "2026-11-03T15:30:00+00:00"}, {"start": "2026-11-04T06:30:00+00:00", "end": "2026-11-04T15:30:00+00:00"}, {"start": "2026-11-05T06:30:00+00:00", "end": "2026-11-05T15:30:00+00:00"}, {"start": "2026-11-06T06:30:00+00:00", "end": "2026-11-06T15:30:00+00:00"}], "busy": []}]}, {"key": "reschedule-pst-est", "title": "Reschedule: confirmed slot just got busy (PST + EST, 30 min)", "duration_minutes": 30, "no_weekdays": [], "prefer_morning_for": [], "participants": [{"name": "account_executive", "tz": "America/Los_Angeles", "required": true, "local_windows": [[0, 540, 1020], [1, 540, 1020], [2, 540, 1020], [3, 540, 1020], [4, 540, 1020]], "windows": [{"start": "2026-11-02T17:00:00+00:00", "end": "2026-11-03T01:00:00+00:00"}, {"start": "2026-11-03T17:00:00+00:00", "end": "2026-11-04T01:00:00+00:00"}, {"start": "2026-11-04T17:00:00+00:00", "end": "2026-11-05T01:00:00+00:00"}, {"start": "2026-11-05T17:00:00+00:00", "end": "2026-11-06T01:00:00+00:00"}, {"start": "2026-11-06T17:00:00+00:00", "end": "2026-11-07T01:00:00+00:00"}], "busy": [{"start": "2026-11-04T17:00:00+00:00", "end": "2026-11-04T17:30:00+00:00"}]}, {"name": "champion", "tz": "America/New_York", "required": true, "local_windows": [[0, 540, 1020], [1, 540, 1020], [2, 540, 1020], [3, 540, 1020], [4, 540, 1020]], "windows": [{"start": "2026-11-02T14:00:00+00:00", "end": "2026-11-02T22:00:00+00:00"}, {"start": "2026-11-03T14:00:00+00:00", "end": "2026-11-03T22:00:00+00:00"}, {"start": "2026-11-04T14:00:00+00:00", "end": "2026-11-04T22:00:00+00:00"}, {"start": "2026-11-05T14:00:00+00:00", "end": "2026-11-05T22:00:00+00:00"}, {"start": "2026-11-06T14:00:00+00:00", "end": "2026-11-06T22:00:00+00:00"}], "busy": []}]}, {"key": "cet-pst-morning", "title": "CET recruiter + PST candidate, 60 min, candidate prefers mornings (soft)", "duration_minutes": 60, "no_weekdays": [], "prefer_morning_for": ["candidate"], "participants": [{"name": "recruiter", "tz": "Europe/Berlin", "required": true, "local_windows": [[0, 900, 1140], [1, 900, 1140], [2, 900, 1140], [3, 900, 1140], [4, 900, 1140]], "windows": [{"start": "2026-11-02T14:00:00+00:00", "end": "2026-11-02T18:00:00+00:00"}, {"start": "2026-11-03T14:00:00+00:00", "end": "2026-11-03T18:00:00+00:00"}, {"start": "2026-11-04T14:00:00+00:00", "end": "2026-11-04T18:00:00+00:00"}, {"start": "2026-11-05T14:00:00+00:00", "end": "2026-11-05T18:00:00+00:00"}, {"start": "2026-11-06T14:00:00+00:00", "end": "2026-11-06T18:00:00+00:00"}], "busy": []}, {"name": "candidate", "tz": "America/Los_Angeles", "required": true, "local_windows": [[0, 540, 1020], [1, 540, 1020], [2, 540, 1020], [3, 540, 1020], [4, 540, 1020]], "windows": [{"start": "2026-11-02T17:00:00+00:00", "end": "2026-11-03T01:00:00+00:00"}, {"start": "2026-11-03T17:00:00+00:00", "end": "2026-11-04T01:00:00+00:00"}, {"start": "2026-11-04T17:00:00+00:00", "end": "2026-11-05T01:00:00+00:00"}, {"start": "2026-11-05T17:00:00+00:00", "end": "2026-11-06T01:00:00+00:00"}, {"start": "2026-11-06T17:00:00+00:00", "end": "2026-11-07T01:00:00+00:00"}], "busy": []}]}, {"key": "optional-shadow", "title": "IST + PST required, second PST shadow optional, 30 min", "duration_minutes": 30, "no_weekdays": [], "prefer_morning_for": [], "participants": [{"name": "coordinator", "tz": "Asia/Kolkata", "required": true, "local_windows": [[0, 1140, 1380], [1, 1140, 1380], [2, 1140, 1380], [3, 1140, 1380], [4, 1140, 1380]], "windows": [{"start": "2026-11-02T13:30:00+00:00", "end": "2026-11-02T17:30:00+00:00"}, {"start": "2026-11-03T13:30:00+00:00", "end": "2026-11-03T17:30:00+00:00"}, {"start": "2026-11-04T13:30:00+00:00", "end": "2026-11-04T17:30:00+00:00"}, {"start": "2026-11-05T13:30:00+00:00", "end": "2026-11-05T17:30:00+00:00"}, {"start": "2026-11-06T13:30:00+00:00", "end": "2026-11-06T17:30:00+00:00"}], "busy": []}, {"name": "interviewer", "tz": "America/Los_Angeles", "required": true, "local_windows": [[0, 360, 540], [1, 360, 540], [2, 360, 540], [3, 360, 540], [4, 360, 540]], "windows": [{"start": "2026-11-02T14:00:00+00:00", "end": "2026-11-02T17:00:00+00:00"}, {"start": "2026-11-03T14:00:00+00:00", "end": "2026-11-03T17:00:00+00:00"}, {"start": "2026-11-04T14:00:00+00:00", "end": "2026-11-04T17:00:00+00:00"}, {"start": "2026-11-05T14:00:00+00:00", "end": "2026-11-05T17:00:00+00:00"}, {"start": "2026-11-06T14:00:00+00:00", "end": "2026-11-06T17:00:00+00:00"}], "busy": [{"start": "2026-11-02T14:00:00+00:00", "end": "2026-11-02T15:00:00+00:00"}]}, {"name": "shadow", "tz": "America/Los_Angeles", "required": false, "local_windows": [[0, 360, 540], [1, 360, 540], [2, 360, 540], [3, 360, 540], [4, 360, 540]], "windows": [{"start": "2026-11-02T14:00:00+00:00", "end": "2026-11-02T17:00:00+00:00"}, {"start": "2026-11-03T14:00:00+00:00", "end": "2026-11-03T17:00:00+00:00"}, {"start": "2026-11-04T14:00:00+00:00", "end": "2026-11-04T17:00:00+00:00"}, {"start": "2026-11-05T14:00:00+00:00", "end": "2026-11-05T17:00:00+00:00"}, {"start": "2026-11-06T14:00:00+00:00", "end": "2026-11-06T17:00:00+00:00"}], "busy": [{"start": "2026-11-03T14:00:00+00:00", "end": "2026-11-03T15:00:00+00:00"}]}]}];
+const HORIZON_MONDAY = Date.UTC(2026,10,2);
+const HORIZON_END = HORIZON_MONDAY + 5*24*60*60000;
+const GRID = 15*60000;
+const MS = 60000;
+function iso(t){return new Date(t).toISOString();}
+function grade(sc, ans){
+  const reasons=[]; let score=0;
+  const start=Date.parse(ans.start_utc), end=Date.parse(ans.end_utc);
+  if(isNaN(start)||isNaN(end)) return {score:0, reason:'unparseable start_utc/end_utc (need tz-aware ISO)'};
+  if(end-start !== sc.duration_minutes*MS){reasons.push('duration '+((end-start)/MS)+'m != '+sc.duration_minutes+'m');} else {score+=0.2;}
+  if(!(start>=HORIZON_MONDAY && end<=HORIZON_END)) reasons.push('outside the scheduling week');
+  const wd=(new Date(start).getUTCDay()+6)%7;
+  if(sc.no_weekdays.includes(wd)) reasons.push('lands on banned weekday '+wd);
+  const checks=[];
+  for(const p of sc.participants){
+    if(!p.required) continue;
+    const inside=p.windows.some(w=>Date.parse(w.start)<=start && end<=Date.parse(w.end));
+    const free=inside && p.busy.every(b=>end<=Date.parse(b.start) || start>=Date.parse(b.end));
+    checks.push(free);
+    if(!free) reasons.push(p.name+' not free in that slot ('+p.tz+')');
+  }
+  if(checks.length) score+=0.6*checks.filter(Boolean).length/checks.length;
+  const prefs=[];
+  for(const name of sc.prefer_morning_for){
+    const p=sc.participants.find(x=>x.name===name);
+    if(!p) continue;
+    const hr=parseInt(new Intl.DateTimeFormat('en-US',{hour:'numeric',hour12:false,timeZone:p.tz}).format(new Date(start)),10)%24;
+    prefs.push(hr<12);
+    if(hr>=12) reasons.push('soft: '+name+' starts at '+hr+':00 local (prefers morning)');
+  }
+  score += prefs.length ? 0.2*prefs.filter(Boolean).length/prefs.length : 0.2;
+  return {score:Math.round(Math.min(score,1)*10000)/10000, reason:reasons.join('; ')||'valid slot'};
+}
+function greedy(sc){
+  const p=sc.participants[0];
+  const [wday,sMin]=p.local_windows[0];
+  const start=HORIZON_MONDAY + wday*24*60*MS + sMin*MS;
+  return {start_utc:iso(start), end_utc:iso(start+sc.duration_minutes*MS)};
+}
+function oracle(sc){
+  for(let day=0;day<5;day++){
+    for(let t=HORIZON_MONDAY+day*24*60*MS;t<HORIZON_MONDAY+(day+1)*24*60*MS;t+=GRID){
+      const ans={start_utc:iso(t),end_utc:iso(t+sc.duration_minutes*MS)};
+      if(grade(sc,ans).score===1.0) return ans;
+    }
+  }
+  return null;
+}
+function localTimes(sc,ans){
+  let h='<table><tr><th>Participant</th><th>Local start</th><th>Required</th></tr>';
+  for(const p of sc.participants){
+    const f=new Intl.DateTimeFormat('en-US',{weekday:'short',hour:'2-digit',minute:'2-digit',timeZone:p.tz,hour12:false});
+    h+='<tr><td>'+p.name+'</td><td>'+f.format(new Date(Date.parse(ans.start_utc)))+' ('+p.tz+')</td><td>'+(p.required?'yes':'no')+'</td></tr>';
+  }
+  return h+'</table>';
+}
+function render(sc,ans,label){
+  if(!ans) return '<div class="card"><h2>'+label+'</h2><p class="fail">no perfect slot found (fixture error)</p></div>';
+  const g=grade(sc,ans);
+  return '<div class="card"><h2>'+label+'</h2><p><b>'+new Date(Date.parse(ans.start_utc)).toUTCString()+'</b> for '+sc.duration_minutes+' min</p>'
+    + localTimes(sc,ans)
+    + '<p class="score">reward '+g.score.toFixed(2)+'</p><p class="'+(g.score===1?'pass':'fail')+'">'+g.reason+'</p></div>';
+}
+function detail(sc){
+  let h='<div class="card"><p>'+sc.duration_minutes+' min, week of Mon Nov 2 2026 (Mon-Fri).'
+    +(sc.no_weekdays.length?' Hard rule: no weekday '+sc.no_weekdays.join(',')+'.':'')
+    +(sc.prefer_morning_for.length?' Soft: morning start for '+sc.prefer_morning_for.join(', ')+'.':'')+'</p>'
+    +'<table><tr><th>Participant</th><th>TZ</th><th>Required</th><th>Windows (local)</th><th>Busy (UTC)</th></tr>';
+  const DAYS=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const mm=m=>String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');
+  for(const p of sc.participants){
+    h+='<tr><td>'+p.name+'</td><td>'+p.tz+'</td><td>'+(p.required?'yes':'no')+'</td><td>'
+      +p.local_windows.map(w=>DAYS[w[0]]+' '+mm(w[1])+'-'+mm(w[2])).join('<br>')+'</td><td>'
+      +(p.busy.length?p.busy.map(b=>b.start.slice(0,16).replace('T',' ')+' to '+b.end.slice(11,16)).join('<br>'):'&mdash;')+'</td></tr>';
+  }
+  return h+'</table></div>';
+}
+const sel=document.getElementById('scn');
+SCENARIOS.forEach((s,i)=>{const o=document.createElement('option');o.value=i;o.textContent=s.title;sel.appendChild(o);});
+function cur(){return SCENARIOS[parseInt(sel.value,10)];}
+sel.onchange=()=>{document.getElementById('detail').innerHTML=detail(cur());document.getElementById('out').innerHTML='';};
+document.getElementById('runGreedy').onclick=()=>{document.getElementById('out').innerHTML=render(cur(),greedy(cur()),'Greedy (reads local window as UTC - the classic bug)');};
+document.getElementById('runOracle').onclick=()=>{document.getElementById('out').innerHTML=render(cur(),oracle(cur()),'Grid oracle (15-min grid, grader consistency ceiling)');};
+sel.onchange();
+</script></body></html>
